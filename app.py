@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import pickle
 import pandas as pd
 import json
+from preprocessing import feature_engineer
 
 app = Flask(__name__)
 
@@ -48,6 +49,36 @@ def predict():
         predictions[model_name] = prediction
 
     return jsonify(predictions)
+
+# endpoint to get the csv file from the frontend
+@app.route('/get_csv', methods=['POST'])
+def get_csv():
+    if request.method == 'POST':
+        f = request.files.get('file')
+        # read the csv file
+        df = pd.read_csv(f)
+        df = feature_engineer(df)
+
+        FEATURES = [c for c in df.columns if c != 'level_group']
+
+        # get unique session_ids from df
+        session_ids = df.index.unique()
+
+        # for each session_id, group_level in df, make a predictiom
+        predictions = {}
+        for session_id in session_ids:
+            print(session_id)
+            for grp in ['0-4', '5-12', '13-22']:
+                q_range = range(1, 4) if grp == '0-4' else range(4, 14) if grp == '5-12' else range(14, 19)
+                # select from df.loc[session_id] only the rows where level_group is grp
+                df_grp = df.loc[session_id].loc[df.loc[session_id]['level_group'] == grp]
+                for q in q_range:
+                    model_name = f'{grp}_{q}'
+                    model = models[model_name]
+                    prediction = model.predict_proba(df_grp[FEATURES].astype('float32'))[:, 1].item()
+                    # print(f'{q}: {prediction}')
+                    predictions.setdefault(session_id, {})[q] = prediction
+        return jsonify(predictions)
 
 if __name__ == '__main__':
     app.run(debug=True)
