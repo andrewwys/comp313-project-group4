@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS 
 import pickle
 import pandas as pd
 import json
 from preprocessing import feature_engineer
 
 app = Flask(__name__)
+CORS(app, resources={r'/*': {'origins': '*'}})
 
 # Load your trained models using pickle
 models = {}
