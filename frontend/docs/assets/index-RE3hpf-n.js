@@ -1,0 +1,17 @@
+(function(){const n=document.createElement("link").relList;if(n&&n.supports&&n.supports("modulepreload"))return;for(const e of document.querySelectorAll('link[rel="modulepreload"]'))l(e);new MutationObserver(e=>{for(const t of e)if(t.type==="childList")for(const r of t.addedNodes)r.tagName==="LINK"&&r.rel==="modulepreload"&&l(r)}).observe(document,{childList:!0,subtree:!0});function i(e){const t={};return e.integrity&&(t.integrity=e.integrity),e.referrerPolicy&&(t.referrerPolicy=e.referrerPolicy),e.crossOrigin==="use-credentials"?t.credentials="include":e.crossOrigin==="anonymous"?t.credentials="omit":t.credentials="same-origin",t}function l(e){if(e.ep)return;e.ep=!0;const t=i(e);fetch(e.href,t)}})();document.querySelector("#app").innerHTML=`
+  <div class="main">
+    <nav><p class="site-title">Predicting Student Performance for Game-based Learning</p></nav>
+    <div class="content">
+      <div class="uploader-area content-item">
+        <div class="content-title">Upload student gaming data for performance predictions:</div>
+        <div class="uploader-wrapper">
+          <input type="file" id="file-upload" name="file" accept=".csv" />
+          <button id="upload-button">Upload</button>
+          <button id="reset-button">Reset</button>
+        </div>
+      </div>
+      <div id="session-selection-area" class="content-item"></div>
+      <div id="result-area" class="result-area content-item"></div>
+    </div>
+  </div>
+`;function f(o){const n=Object.keys(o),i=document.getElementById("session-selection-area"),l=document.createElement("p");l.innerHTML="Select a session:",i.appendChild(l),n.forEach((e,t)=>{const r=document.createElement("div");r.className="session-row";const s=document.createElement("input");s.type="radio",s.id=`session-${t}`,s.name="session",s.value=e;const d=document.createElement("label");d.htmlFor=`session-${t}`,d.textContent=e,s.addEventListener("change",function(){const c=document.getElementById("result-area");for(;c.firstChild;)c.removeChild(c.firstChild);Object.entries(o[e]).forEach(([m,p])=>{const a=document.createElement("div");a.className="result-row",a.innerHTML=`${m}: ${Math.round(p*100)/100}`,c.appendChild(a)})}),r.appendChild(s),r.appendChild(d),i.appendChild(r)})}const u=()=>{const o=document.querySelector("#session-selection-area");for(;o.firstChild;)o.removeChild(o.firstChild);const n=document.getElementById("result-area");for(;n.firstChild;)n.removeChild(n.firstChild)};document.querySelector("#upload-button").addEventListener("click",function(){u(),document.querySelector("#upload-button").disabled=!0;const n=document.querySelector("#file-upload").files[0],i=new FormData;i.append("file",n);const l=document.querySelector("#session-selection-area"),e=document.createElement("p");e.id="loading-message",e.innerHTML="Loading...",l.appendChild(e),fetch("https://comp313-backend.onrender.com/get_csv",{method:"POST",body:i}).then(t=>t.json()).then(t=>{u(),f(t)}).catch(t=>{u();const r=document.querySelector("#session-selection-area"),s=document.createElement("p");s.innerHTML="Something went wrong. Please try again.",r.appendChild(s),document.querySelector("#upload-button").disabled=!1})});document.querySelector("#reset-button").addEventListener("click",function(){document.querySelector("#upload-button").disabled=!1,document.querySelector("#file-upload").value="";const o=document.querySelector("#session-selection-area");for(;o.firstChild;)o.removeChild(o.firstChild);const n=document.getElementById("result-area");for(;n.firstChild;)n.removeChild(n.firstChild)});
