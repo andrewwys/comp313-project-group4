@@ -9,6 +9,7 @@ document.querySelector('#app').innerHTML = `
         <div class="uploader-wrapper">
           <input type="file" id="file-upload" name="file" accept=".csv" />
           <button id="upload-button">Upload</button>
+          <button id="reset-button">Reset</button>
         </div>
       </div>
       <div id="session-selection-area" class="content-item"></div>
@@ -61,11 +62,35 @@ function displaySessionSelection(data) {
   });
 }
 
+const clearResults = () => {
+  // clear session selection area and result area
+  const sessionSelectionArea = document.querySelector('#session-selection-area');
+  while (sessionSelectionArea.firstChild) {
+    sessionSelectionArea.removeChild(sessionSelectionArea.firstChild);
+  }
+  const resultArea = document.getElementById('result-area');
+  while (resultArea.firstChild) {
+    resultArea.removeChild(resultArea.firstChild);
+  }
+}
+
 document.querySelector('#upload-button').addEventListener('click', function() {
+  clearResults();
+  // disable file upload button
+  document.querySelector('#upload-button').disabled = true;
+
+  // get file from file input
   const fileInput = document.querySelector('#file-upload');
   const file = fileInput.files[0];
   const formData = new FormData();
   formData.append('file', file);
+
+  // display loading message on the session selection area
+  const sessionSelectionArea = document.querySelector('#session-selection-area');
+  const loadingMessage = document.createElement('p');
+  loadingMessage.id = 'loading-message';
+  loadingMessage.innerHTML = 'Loading...';
+  sessionSelectionArea.appendChild(loadingMessage);
 
   fetch('https://comp313-backend.onrender.com/get_csv', {
     method: 'POST',
@@ -73,11 +98,34 @@ document.querySelector('#upload-button').addEventListener('click', function() {
   })
   .then(response => response.json())
   .then(data => {
-    console.log(data);
-    // read keys from the response
+    clearResults();
     displaySessionSelection(data);
   })
   .catch(error => {
-    console.error('Error:', error);
+    clearResults();
+    // display error message on the session selection area
+    const sessionSelectionArea = document.querySelector('#session-selection-area');
+    const errorMessage = document.createElement('p');
+    errorMessage.innerHTML = 'Something went wrong. Please try again.';
+    sessionSelectionArea.appendChild(errorMessage);
+    // enable file upload button
+    document.querySelector('#upload-button').disabled = false;
   });
+});
+
+document.querySelector('#reset-button').addEventListener('click', function() {
+  // enable file upload button
+  document.querySelector('#upload-button').disabled = false;
+  // clear file input
+  document.querySelector('#file-upload').value = '';
+  // clear session selection area
+  const sessionSelectionArea = document.querySelector('#session-selection-area');
+  while (sessionSelectionArea.firstChild) {
+    sessionSelectionArea.removeChild(sessionSelectionArea.firstChild);
+  }
+  // clear result area
+  const resultArea = document.getElementById('result-area');
+  while (resultArea.firstChild) {
+    resultArea.removeChild(resultArea.firstChild);
+  }
 });
