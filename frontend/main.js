@@ -47,10 +47,12 @@ function displaySessionSelection(data) {
       while (resultArea.firstChild) {
         resultArea.removeChild(resultArea.firstChild);
       }
-      Object.entries(data[sessionId]).forEach(([questionId, probability]) => {
+      Object.entries(data[sessionId]).forEach(([questionId, prediction]) => {
         const row = document.createElement('div');
+        let predictionText= "Incorrect";
+        if (Math.round(prediction) === 1) predictionText = "Correct";
         row.className = 'result-row';
-        row.innerHTML = `${questionId}: ${Math.round(probability * 100)/100}`;
+        row.innerHTML = `${questionId}: <span class="prediction-${predictionText}">${predictionText}</span>`;
         resultArea.appendChild(row);
       });
     });

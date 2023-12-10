@@ -62,6 +62,7 @@ def get_csv():
         df = feature_engineer(df)
 
         FEATURES = [c for c in df.columns if c != 'level_group']
+        PRED_THRESHOLD = 0.63
 
         # get unique session_ids from df
         session_ids = df.index.unique()
@@ -79,6 +80,10 @@ def get_csv():
                     model = models[model_name]
                     prediction = model.predict_proba(df_grp[FEATURES].astype('float32'))[:, 1].item()
                     # print(f'{q}: {prediction}')
+                    if prediction > PRED_THRESHOLD:
+                        prediction = 1
+                    else:
+                        prediction = 0
                     predictions.setdefault(session_id, {})[q] = prediction
         return jsonify(predictions)
 

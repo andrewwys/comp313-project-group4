@@ -77,6 +77,16 @@ nav {
   font-size: 1.1rem;
 }
 
+.prediction-Correct {
+  color: rgb(0, 182, 0);
+  font-weight: 700;
+}
+
+.prediction-Incorrect {
+  color: rgb(182, 0, 0);
+  font-weight: 700;
+}
+
 button {
   border-radius: 8px;
   border: 1px solid transparent;
