@@ -239,24 +239,6 @@ def feature_engineer(train):
     df = df.set_index('session_id')
     return df
 
-# # Handle train data in chunks
-# chunks = []
-# print(f'Handling train data in 10 chunks to prevent memory issues')
-# for i in range(10):
-#     print(i,', ',end='')
-#     SKIP_ROWS = 0
-#     if i>0: SKIP_ROWS = range(1,skips[i]+1)
-#     train_data = pd.read_csv('/content/kaggle/train.csv', nrows=reads[i], skiprows=SKIPS)
-#     processed_data = feature_engineer(train_data)
-#     chunks.append(processed_data)
-
-# # Merge all chunks
-# print()
-# del train_data; gc.collect()
-# df = pd.concat(chunks, axis=0)
-# print('Shape of all train data after feature engineering:', df.shape )
-# df.head()
-
 X_processed = feature_engineer(X_full)
 print('Shape of all train data after feature engineering:', X_processed.shape )
 X_processed.head()
@@ -288,6 +270,106 @@ from sklearn.model_selection import KFold, GroupKFold
 from xgboost import XGBClassifier
 from sklearn.metrics import log_loss
 from statistics import mean
+
+"""In this game the first quiz checkpoint(i.e., questions 1 to 3) comes after
+ finishing levels 0 to 4. So for training questions 1 to 3 we will use data from the level_group 0-4. Similarly, we will use data from the level_group 5-12 to train questions from 4 to 13 and data from the level_group 13-22 to train questions from 14 to 18.
+
+##### A function to train the model
+"""
+
+def train_model(X_processed, y_full, ALL_USERS, FEATURES, clf):
+    gkf = GroupKFold(n_splits=5)
+    results = pd.DataFrame(data=np.zeros((len(ALL_USERS),18)), index=ALL_USERS)
+    models = {}
+    overall_log_loss = []
+
+    for i, (train_index, test_index) in enumerate(gkf.split(X=X_processed, groups=X_processed.index)):
+        # print('#'*25)
+        # print('### Fold',i+1)
+
+        split_log_loss = []
+        for q in range(1,19):
+            if q<=3: grp = '0-4'
+            elif q<=13: grp = '5-12'
+            elif q<=22: grp = '13-22'
+
+            train_x = X_processed.iloc[train_index]
+            train_x = train_x.loc[train_x.level_group == grp]
+            train_users = train_x.index.values
+            train_y = y_full.loc[y_full.q==q].set_index('session').loc[train_users]
+
+            valid_x = X_processed.iloc[test_index]
+            valid_x = valid_x.loc[valid_x.level_group == grp]
+            valid_users = valid_x.index.values
+            valid_y = y_full.loc[y_full.q==q].set_index('session').loc[valid_users]
+
+            clf.fit(train_x[FEATURES].astype('float32'), train_y['correct'],
+                    eval_set=[ (valid_x[FEATURES].astype('float32'), valid_y['correct']) ],
+                    verbose=0)
+            log_loss = mean(clf.evals_result()['validation_0']['logloss'])
+            # print(f'q{q} log_loss = {log_loss}')
+            split_log_loss.append(log_loss)
+
+            models[f'{grp}_{q}'] = clf
+            results.loc[valid_users, q-1] = clf.predict_proba(valid_x[FEATURES].astype('float32'))[:,1]
+
+        avg_split_log_loss = mean(split_log_loss)
+        # print(f'Fold {i+1} - Average Log Loss = {avg_split_log_loss}')
+        overall_log_loss.append(avg_split_log_loss)
+
+        # print('#'*25)
+        # print()
+    print(f"  Average log loss = {mean(overall_log_loss)}")
+    return models, results, overall_log_loss
+
+"""#### Hyperparameters tuning"""
+
+param_grid = {
+    'learning_rate': [0.1, 0.2], # [0.01, 0.1, 0.2],
+    'max_depth': [3], # [3, 5, 7],
+    'n_estimators': [200], # [50, 100, 200],
+    'subsample': [0.8, 1.0] # [0.8, 1.0],
+}
+
+best_overall_log_loss = []
+best_avg_log_loss = 100
+best_model = None
+best_model_prediction = None
+
+for learning_rate in param_grid['learning_rate']:
+  for max_depth in param_grid['max_depth']:
+    for n_estimators in param_grid['n_estimators']:
+      for subsample in param_grid['subsample']:
+        clf = XGBClassifier(
+            objective = 'binary:logistic',
+            eval_metric = 'logloss',
+            learning_rate = learning_rate,
+            max_depth = max_depth,
+            n_estimators = n_estimators,
+            early_stopping_rounds = 50,
+            tree_method = 'hist',
+            subsample = subsample,
+            colsample_bytree = 0.4,
+            use_label_encoder = False,
+            random_state = 42,
+        )
+        models, results, overall_log_loss = train_model(X_processed, y_full, ALL_USERS, FEATURES, clf)
+
+        avg_log_loss = mean(overall_log_loss)
+        if avg_log_loss < best_avg_log_loss:
+          best_overall_log_loss = overall_log_loss
+          best_avg_log_loss = avg_log_loss
+          best_model = clf
+          best_model_prediction = results
+
+# Print the best parameters
+best_model.get_params()
+
+# Print the log loss
+print("Best overall log loss: ", best_overall_log_loss)
+print("Best avg log_loss: ", best_avg_log_loss)
+
+"""Below code is the initial development of the model before cross-validatoin is applied. Now commented.
 
 gkf = GroupKFold(n_splits=5)
 oof = pd.DataFrame(data=np.zeros((len(ALL_USERS),18)), index=ALL_USERS)
@@ -357,10 +439,11 @@ for i, (train_index, test_index) in enumerate(gkf.split(X=X_processed, groups=X_
 print(f'Log loss for 5 CVs: {overall_log_loss}')
 print(f'Average: {mean(overall_log_loss)}')
 
-"""### CV Scores:"""
+### CV Scores:
+"""
 
 # Put the true labels into dataframe with 18 columns
-true = oof.copy()
+true = best_model_prediction.copy()
 for k in range(18):
     # GET TRUE LABELS
     tmp = y_full.loc[y_full.q == k+1].set_index('session').loc[ALL_USERS]
@@ -376,7 +459,7 @@ best_score = 0; best_threshold = 0
 
 for threshold in np.arange(0.4,0.81,0.01):
     print(f'{threshold:.02f}, ',end='')
-    preds = (oof.values.reshape((-1))>threshold).astype('int')
+    preds = (best_model_prediction.values.reshape((-1))>threshold).astype('int')
     m = f1_score(true.values.reshape((-1)), preds, average='macro')
     scores.append(m)
     thresholds.append(threshold)
@@ -400,23 +483,19 @@ print('When using optimal threshold...')
 for k in range(18):
 
     # F1 score for each question
-    m = f1_score(true[k].values, (oof[k].values>best_threshold).astype('int'), average='macro')
+    m = f1_score(true[k].values, (best_model_prediction[k].values>best_threshold).astype('int'), average='macro')
     print(f'Q{k}: F1 =',m)
 
 # Overall f1 score
-m = f1_score(true.values.reshape((-1)), (oof.values.reshape((-1))>best_threshold).astype('int'), average='macro')
+m = f1_score(true.values.reshape((-1)), (best_model_prediction.values.reshape((-1))>best_threshold).astype('int'), average='macro')
 print('==> Overall F1 =',m)
 
-# Load the test file and evaluate the model:
-X_test = pd.read_csv(os.path.join(data_path, test_file), dtype=dtypes)
-print(f"Shape of the full training dataset: {X_test.shape}")
+"""### Export the model by pickle"""
 
-X_test.info()
-
-# Save the models to pickle files
 import pickle
+
 for model_name, model in models.items():
-    filename = f'{model_name}_model.pkl'
-    with open(filename, 'wb') as file:
-        pickle.dump(model, file)
-        print(f"Model '{model_name}' saved to '{filename}'")
+ filename = f'{model_name}_model.pkl'
+ with open(filename, 'wb') as file:
+ pickle.dump(model, file)
+ print(f"Model '{model_name}' saved to '{filename}'")
